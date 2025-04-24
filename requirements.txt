@@ -1,5 +1,5 @@
 langchain
-llama-index==0.10.14
+llama-index==0.12.33
 haystack
 
 fastapi
