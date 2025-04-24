@@ -1,7 +1,6 @@
 langchain
 llama-index==0.10.14
-llama-index-embeddings-huggingface==0.3.1
-haystack
+llama-index-embeddings-huggingface==0.2.0  
 fastapi
 uvicorn
 requests
