@@ -52,3 +52,10 @@ def chat_with_memory(request: ChatRequest):
 def chat_with_documents(request: ChatRequest):
     response = query_documents(request.query)
     return {"response": str(response)}
+
+if __name__ == "__main__":
+    import uvicorn
+    import os
+
+    port = int(os.environ.get("PORT", 8000))  # Use Render's $PORT, fallback to 8000 for local
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
