@@ -16,6 +16,7 @@ os.environ["TRANSFORMERS_NO_TF"] = "1"
 from dotenv import load_dotenv
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.core import VectorStoreIndex, SimpleDirectoryReader
+from llama_index.core import StorageContext, load_index_from_storage
 import google.generativeai as genai
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
