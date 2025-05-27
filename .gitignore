@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+
+# Environment Variables
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs and databases
+*.log
+*.sqlite
+chat_log.csv
+alerts_log.json
+metrics_log.json
+metrics_history.csv
+metrics_report.txt
+metrics_summary.txt
+
+# Application specific
+index_store/
+static/metrics_dashboard.html
+
+# OS specific
+.DS_Store
+Thumbs.db 

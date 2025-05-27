@@ -6,3 +6,4 @@ uvicorn
 requests
 python-dotenv
 google-generativeai
+psutil>=7.0.0
