@@ -1,5 +1,6 @@
 import os
 os.environ["TRANSFORMERS_NO_TF"] = "1"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 # Now, your other imports
 from fastapi import FastAPI, Request
@@ -37,21 +38,20 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         return response
 
-# Load environment variables
+# Load environment variables first
 load_dotenv()
-# print("Gemini API Key:", os.getenv("GEMINI_API_KEY"))  # For debug (optional)
 
-# Create static directory if it doesn't exist
-os.makedirs("static", exist_ok=True)
+# Get port from environment with fallback
+PORT = int(os.getenv("PORT", 10000))
 
-# FastAPI app
+# Create FastAPI app
 app = FastAPI(
     title="ReachOut Chatbot API",
     description="Mental health chatbot with document Q&A capabilities",
     version="1.0.0"
 )
 
-# Initialize metrics collector
+# Initialize metrics collector with reduced memory footprint
 metrics = MetricsCollector()
 
 # Mount static files
@@ -66,14 +66,13 @@ app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000",  # Local development
-        "https://localhost:3000",  # Local development with HTTPS
-        os.getenv("FRONTEND_URL", ""),  # Production frontend URL
+        "http://localhost:3000",
+        "https://localhost:3000", 
+        os.getenv("FRONTEND_URL", ""),
     ],
     allow_credentials=True,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
-    max_age=86400,  # Cache preflight requests for 24 hours
 )
 
 @app.middleware("http")
@@ -115,14 +114,7 @@ async def startup_event():
 @app.get("/")
 def read_root():
     """Health check endpoint"""
-    return JSONResponse(
-        content={
-            "status": "healthy",
-            "timestamp": time.time(),
-            "environment": os.getenv("ENVIRONMENT", "development")
-        },
-        status_code=200
-    )
+    return {"status": "healthy"}
 
 @app.get("/dashboard")
 def get_dashboard():
@@ -137,12 +129,10 @@ def chat_with_memory(request: ChatRequest):
     session_id = request.session_id
     user_query = request.query
     
-    # Crisis check
     if contains_crisis_keywords(user_query):
         log_chat(session_id, user_query, SAFETY_MESSAGE, is_crisis=True)
         return {"response": SAFETY_MESSAGE}
 
-    # Get chatbot response
     response = get_response(session_id, user_query)
     log_chat(session_id, user_query, response, is_crisis=False)
     return {"response": response}
@@ -154,7 +144,4 @@ def chat_with_documents(request: ChatRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    import os
-
-    port = int(os.environ.get("PORT", 8000))  # Use Render's $PORT, fallback to 8000 for local
-    uvicorn.run("main:app", host="0.0.0.0", port=port)
+    uvicorn.run(app, host="0.0.0.0", port=PORT)
