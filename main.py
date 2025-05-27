@@ -1,5 +1,10 @@
 import os
 import sys
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Set environment variables before any other imports
 os.environ["TRANSFORMERS_NO_TF"] = "1"
@@ -17,6 +22,7 @@ load_dotenv()
 
 # Get port from environment with fallback
 PORT = int(os.getenv("PORT", 10000))
+logger.info(f"Configured to use PORT: {PORT}")
 
 # Create FastAPI app
 app = FastAPI(
@@ -36,22 +42,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.on_event("startup")
+async def startup_event():
+    logger.info(f"Starting application on port {PORT}")
+    # Initialize required modules at startup
+    try:
+        from models import ChatRequest
+        from chat_engine import get_response
+        from crisis import contains_crisis_keywords, SAFETY_MESSAGE
+        from logger import log_chat
+        from doc_engine import query_documents
+        logger.info("Successfully loaded all required modules")
+    except ImportError as e:
+        logger.error(f"Failed to import required modules: {e}")
+        sys.exit(1)
+
 @app.get("/")
 @app.head("/")  # Added HEAD endpoint for health checks
 def read_root():
     """Health check endpoint"""
-    return {"status": "ok"}  # Simplified response
-
-# Initialize required modules at startup
-try:
-    from models import ChatRequest
-    from chat_engine import get_response
-    from crisis import contains_crisis_keywords, SAFETY_MESSAGE
-    from logger import log_chat
-    from doc_engine import query_documents
-except ImportError as e:
-    print(f"Failed to import required modules: {e}")
-    sys.exit(1)
+    logger.info("Health check request received")
+    return {"status": "ok", "port": PORT}
 
 @app.post("/chat")
 async def chat_with_memory(request: Request):
@@ -67,6 +78,7 @@ async def chat_with_memory(request: Request):
         log_chat(chat_request.session_id, chat_request.query, response, is_crisis=False)
         return {"response": response}
     except Exception as e:
+        logger.error(f"Error in chat endpoint: {e}")
         return JSONResponse(
             status_code=500,
             content={"error": str(e)}
@@ -79,6 +91,7 @@ async def chat_with_documents(request: Request):
         response = query_documents(data.get("query", ""))
         return {"response": str(response)}
     except Exception as e:
+        logger.error(f"Error in doc-chat endpoint: {e}")
         return JSONResponse(
             status_code=500,
             content={"error": str(e)}
@@ -86,4 +99,5 @@ async def chat_with_documents(request: Request):
 
 if __name__ == "__main__":
     import uvicorn
+    logger.info(f"Starting server on port {PORT}")
     uvicorn.run(app, host="0.0.0.0", port=PORT)

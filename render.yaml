@@ -9,7 +9,7 @@ services:
       python -c "import nltk; nltk.download('punkt', download_dir='/tmp/nltk_data')"
       # Pre-download required models
       python -c "from transformers import AutoTokenizer; AutoTokenizer.from_pretrained('sentence-transformers/all-MiniLM-L6-v2', cache_dir='/tmp/transformers')"
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1 --limit-concurrency 3 --timeout-keep-alive 30 --no-access-log --lifespan off --no-use-colors --loop uvloop
+    startCommand: python main.py
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
@@ -37,6 +37,8 @@ services:
         value: "65536"
       - key: PYTHONMALLOC
         value: "malloc"
+      - key: PYTHONUNBUFFERED
+        value: "true"
     autoDeploy: true
     healthCheckPath: /
     healthCheckTimeout: 60
