@@ -7,3 +7,10 @@ requests
 python-dotenv
 google-generativeai
 psutil>=7.0.0
+nltk
+pandas
+numpy
+scikit-learn
+starlette
+python-multipart
+aiofiles

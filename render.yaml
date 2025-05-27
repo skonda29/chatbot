@@ -6,7 +6,7 @@ services:
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
-        value: 3.9.0
+        value: 3.11.0
       - key: GEMINI_API_KEY
         sync: false
       - key: FRONTEND_URL
@@ -15,6 +15,8 @@ services:
         value: production
       - key: TOKENIZERS_PARALLELISM
         value: "false"
+      - key: PORT
+        value: "10000"
     autoDeploy: true
     healthCheckPath: /
     healthCheckTimeout: 100
