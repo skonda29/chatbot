@@ -3,10 +3,11 @@ services:
     name: chatbot-api
     env: python
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: >
-      python -c "import nltk; nltk.download('punkt', download_dir='/tmp/nltk_data')" &&
-      uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1 --limit-concurrency 10 --no-access-log --lifespan off
+    buildCommand: |
+      python -m pip install --upgrade pip
+      pip install -r requirements.txt
+      python -c "import nltk; nltk.download('punkt', download_dir='/tmp/nltk_data')"
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1 --limit-concurrency 5 --no-access-log --lifespan off --no-use-colors --loop uvloop
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
@@ -24,11 +25,17 @@ services:
         value: .
       - key: NLTK_DATA
         value: /tmp/nltk_data
+      - key: TRANSFORMERS_CACHE
+        value: /tmp/transformers
+      - key: TORCH_HOME
+        value: /tmp/torch
+      - key: HF_HOME
+        value: /tmp/huggingface
     autoDeploy: true
     healthCheckPath: /
     disk:
-      name: chatbot-data
-      mountPath: /app/data
+      name: tmp-data
+      mountPath: /tmp
       sizeGB: 1
     scaling:
       minInstances: 1

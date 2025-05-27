@@ -1,45 +1,18 @@
 import os
-os.environ["TRANSFORMERS_NO_TF"] = "1"
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
-os.environ["NLTK_DATA"] = "/tmp/nltk_data"  # Store NLTK data in temporary directory
-
-# Now, your other imports
-from fastapi import FastAPI, Request
-from doc_engine import query_documents
-from fastapi import FastAPI
-from dotenv import load_dotenv
-from models import ChatRequest
-from chat_engine import get_response
-from crisis import contains_crisis_keywords, SAFETY_MESSAGE
-from logger import log_chat
-from doc_engine import query_documents
-from fastapi.middleware.cors import CORSMiddleware
-from metrics import MetricsCollector
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.middleware.gzip import GZipMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.types import ASGIApp
-import time
-import asyncio
-import subprocess
 import sys
 
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app: ASGIApp):
-        super().__init__(app)
+# Set environment variables before any other imports
+os.environ["TRANSFORMERS_NO_TF"] = "1"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["NLTK_DATA"] = "/tmp/nltk_data"
 
-    async def dispatch(self, request: Request, call_next):
-        response = await call_next(request)
-        response.headers["X-Frame-Options"] = "DENY"
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-        response.headers["X-XSS-Protection"] = "1; mode=block"
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        return response
+# Import only what's needed initially
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from dotenv import load_dotenv
 
-# Load environment variables first
+# Load environment variables
 load_dotenv()
 
 # Get port from environment with fallback
@@ -49,110 +22,52 @@ PORT = int(os.getenv("PORT", 10000))
 app = FastAPI(
     title="ReachOut Chatbot API",
     description="Mental health chatbot with document Q&A capabilities",
-    version="1.0.0"
+    version="1.0.0",
+    docs_url=None,  # Disable docs to save memory
+    redoc_url=None  # Disable redoc to save memory
 )
 
-# Initialize metrics collector with reduced memory footprint
-metrics = MetricsCollector()
-
-# Mount static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
-# Security middleware
-app.add_middleware(SecurityHeadersMiddleware)
-app.add_middleware(GZipMiddleware, minimum_size=1000)
-app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
-
-# CORS middleware - update this with your web application's domain
+# CORS middleware with minimal settings
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "https://localhost:3000", 
-        os.getenv("FRONTEND_URL", ""),
-    ],
+    allow_origins=[os.getenv("FRONTEND_URL", "")],
     allow_credentials=True,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
-@app.middleware("http")
-async def add_metrics(request: Request, call_next):
-    start_time = time.time()
-    response = await call_next(request)
-    response_time = time.time() - start_time
-    
-    # Record request metrics
-    metrics.record_request(
-        endpoint=str(request.url.path),
-        response_time=response_time,
-        status_code=response.status_code
-    )
-    
-    return response
-
-# Background task to record system metrics
-async def record_system_metrics():
-    while True:
-        metrics.record_system_metrics()
-        await asyncio.sleep(60)  # Record every minute
-
-async def run_endpoint_tests():
-    """Run the endpoint tests in the background"""
-    await asyncio.sleep(2)  # Wait for server to fully start
-    try:
-        subprocess.Popen([sys.executable, "test_endpoints.py"])
-    except Exception as e:
-        print(f"Error running endpoint tests: {e}")
-
-@app.on_event("startup")
-async def startup_event():
-    # Start system metrics collection
-    asyncio.create_task(record_system_metrics())
-    # Start endpoint testing
-    asyncio.create_task(run_endpoint_tests())
-
 @app.get("/")
 def read_root():
     """Health check endpoint"""
-    return {"status": "healthy"}
-
-@app.get("/dashboard")
-def get_dashboard():
-    return FileResponse("static/metrics_dashboard.html")
-
-@app.get("/metrics")
-async def get_metrics():
-    # Lazy import metrics to save memory
-    from metrics import MetricsCollector
-    metrics = MetricsCollector()
-    return metrics.get_summary()
+    return {"status": "healthy", "port": PORT}
 
 @app.post("/chat")
-async def chat_with_memory(request: ChatRequest):
-    # Lazy imports to reduce memory usage
+async def chat_with_memory(request: Request):
+    # Lazy imports
+    from models import ChatRequest
     from chat_engine import get_response
     from crisis import contains_crisis_keywords, SAFETY_MESSAGE
     from logger import log_chat
     
-    session_id = request.session_id
-    user_query = request.query
+    data = await request.json()
+    chat_request = ChatRequest(**data)
     
-    if contains_crisis_keywords(user_query):
-        log_chat(session_id, user_query, SAFETY_MESSAGE, is_crisis=True)
+    if contains_crisis_keywords(chat_request.query):
+        log_chat(chat_request.session_id, chat_request.query, SAFETY_MESSAGE, is_crisis=True)
         return {"response": SAFETY_MESSAGE}
 
-    response = get_response(session_id, user_query)
-    log_chat(session_id, user_query, response, is_crisis=False)
+    response = get_response(chat_request.session_id, chat_request.query)
+    log_chat(chat_request.session_id, chat_request.query, response, is_crisis=False)
     return {"response": response}
 
 @app.post("/doc-chat")
-async def chat_with_documents(request: ChatRequest):
-    # Lazy import to reduce memory usage
+async def chat_with_documents(request: Request):
+    # Lazy import
     from doc_engine import query_documents
-    response = query_documents(request.query)
+    data = await request.json()
+    response = query_documents(data.get("query", ""))
     return {"response": str(response)}
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=PORT, workers=1)
+    uvicorn.run(app, host="0.0.0.0", port=PORT)
