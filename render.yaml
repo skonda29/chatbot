@@ -7,7 +7,9 @@ services:
       python -m pip install --upgrade pip
       pip install -r requirements.txt
       python -c "import nltk; nltk.download('punkt', download_dir='/tmp/nltk_data')"
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1 --limit-concurrency 5 --no-access-log --lifespan off --no-use-colors --loop uvloop
+      # Pre-download required models
+      python -c "from transformers import AutoTokenizer; AutoTokenizer.from_pretrained('sentence-transformers/all-MiniLM-L6-v2', cache_dir='/tmp/transformers')"
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1 --limit-concurrency 3 --timeout-keep-alive 30 --no-access-log --lifespan off --no-use-colors --loop uvloop
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
@@ -31,8 +33,13 @@ services:
         value: /tmp/torch
       - key: HF_HOME
         value: /tmp/huggingface
+      - key: MALLOC_TRIM_THRESHOLD_
+        value: "65536"
+      - key: PYTHONMALLOC
+        value: "malloc"
     autoDeploy: true
     healthCheckPath: /
+    healthCheckTimeout: 60
     disk:
       name: tmp-data
       mountPath: /tmp
@@ -40,6 +47,6 @@ services:
     scaling:
       minInstances: 1
       maxInstances: 1
-      targetMemoryPercent: 80
+      targetMemoryPercent: 70
     initialInstanceCount: 1
     numInstances: 1

@@ -32,41 +32,57 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[os.getenv("FRONTEND_URL", "")],
     allow_credentials=True,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "HEAD"],  # Added HEAD for health checks
     allow_headers=["*"],
 )
 
 @app.get("/")
+@app.head("/")  # Added HEAD endpoint for health checks
 def read_root():
     """Health check endpoint"""
-    return {"status": "healthy", "port": PORT}
+    return {"status": "ok"}  # Simplified response
 
-@app.post("/chat")
-async def chat_with_memory(request: Request):
-    # Lazy imports
+# Initialize required modules at startup
+try:
     from models import ChatRequest
     from chat_engine import get_response
     from crisis import contains_crisis_keywords, SAFETY_MESSAGE
     from logger import log_chat
-    
-    data = await request.json()
-    chat_request = ChatRequest(**data)
-    
-    if contains_crisis_keywords(chat_request.query):
-        log_chat(chat_request.session_id, chat_request.query, SAFETY_MESSAGE, is_crisis=True)
-        return {"response": SAFETY_MESSAGE}
+    from doc_engine import query_documents
+except ImportError as e:
+    print(f"Failed to import required modules: {e}")
+    sys.exit(1)
 
-    response = get_response(chat_request.session_id, chat_request.query)
-    log_chat(chat_request.session_id, chat_request.query, response, is_crisis=False)
-    return {"response": response}
+@app.post("/chat")
+async def chat_with_memory(request: Request):
+    try:
+        data = await request.json()
+        chat_request = ChatRequest(**data)
+        
+        if contains_crisis_keywords(chat_request.query):
+            log_chat(chat_request.session_id, chat_request.query, SAFETY_MESSAGE, is_crisis=True)
+            return {"response": SAFETY_MESSAGE}
+
+        response = get_response(chat_request.session_id, chat_request.query)
+        log_chat(chat_request.session_id, chat_request.query, response, is_crisis=False)
+        return {"response": response}
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
 
 @app.post("/doc-chat")
 async def chat_with_documents(request: Request):
-    # Lazy import
-    from doc_engine import query_documents
-    data = await request.json()
-    response = query_documents(data.get("query", ""))
-    return {"response": str(response)}
+    try:
+        data = await request.json()
+        response = query_documents(data.get("query", ""))
+        return {"response": str(response)}
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
 
 if __name__ == "__main__":
     import uvicorn
