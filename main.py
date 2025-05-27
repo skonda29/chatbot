@@ -14,13 +14,28 @@ from doc_engine import query_documents
 from fastapi.middleware.cors import CORSMiddleware
 from metrics import MetricsCollector
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.types import ASGIApp
 import time
 import asyncio
 import subprocess
 import sys
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app: ASGIApp):
+        super().__init__(app)
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        return response
 
 # Load environment variables
 load_dotenv()
@@ -43,6 +58,7 @@ metrics = MetricsCollector()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Security middleware
+app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
 
@@ -98,7 +114,15 @@ async def startup_event():
 
 @app.get("/")
 def read_root():
-    return "OK"
+    """Health check endpoint"""
+    return JSONResponse(
+        content={
+            "status": "healthy",
+            "timestamp": time.time(),
+            "environment": os.getenv("ENVIRONMENT", "development")
+        },
+        status_code=200
+    )
 
 @app.get("/dashboard")
 def get_dashboard():
