@@ -19,9 +19,9 @@ services:
         value: "10000"
     autoDeploy: true
     healthCheckPath: /
-    healthCheckTimeout: 100
+    healthCheckTimeout: 10
     healthCheckInterval: 15
     disk:
       name: chatbot-data
       mountPath: /app/data
-      sizeGB: 1 
+      sizeGB: 1
