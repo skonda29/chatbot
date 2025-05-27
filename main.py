@@ -1,6 +1,7 @@
 import os
 os.environ["TRANSFORMERS_NO_TF"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["NLTK_DATA"] = "/tmp/nltk_data"  # Store NLTK data in temporary directory
 
 # Now, your other imports
 from fastapi import FastAPI, Request
@@ -121,11 +122,19 @@ def get_dashboard():
     return FileResponse("static/metrics_dashboard.html")
 
 @app.get("/metrics")
-def get_metrics():
+async def get_metrics():
+    # Lazy import metrics to save memory
+    from metrics import MetricsCollector
+    metrics = MetricsCollector()
     return metrics.get_summary()
 
 @app.post("/chat")
-def chat_with_memory(request: ChatRequest):
+async def chat_with_memory(request: ChatRequest):
+    # Lazy imports to reduce memory usage
+    from chat_engine import get_response
+    from crisis import contains_crisis_keywords, SAFETY_MESSAGE
+    from logger import log_chat
+    
     session_id = request.session_id
     user_query = request.query
     
@@ -138,10 +147,12 @@ def chat_with_memory(request: ChatRequest):
     return {"response": response}
 
 @app.post("/doc-chat")
-def chat_with_documents(request: ChatRequest):
+async def chat_with_documents(request: ChatRequest):
+    # Lazy import to reduce memory usage
+    from doc_engine import query_documents
     response = query_documents(request.query)
     return {"response": str(response)}
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=PORT)
+    uvicorn.run(app, host="0.0.0.0", port=PORT, workers=1)
