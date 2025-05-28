@@ -1,13 +1,12 @@
 import os
 import sys
 import logging
-import socket
 
 # Configure logging
 logging.basicConfig(
-    level=logging.DEBUG,  # Changed to DEBUG for more verbose logging
+    level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    stream=sys.stdout  # Explicitly log to stdout
+    stream=sys.stdout
 )
 logger = logging.getLogger(__name__)
 
@@ -16,23 +15,9 @@ os.environ["TRANSFORMERS_NO_TF"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["NLTK_DATA"] = "/tmp/nltk_data"
 
-# Import only what's needed initially
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-import uvicorn
-
-# Get port from environment with explicit fallback and logging
-try:
-    PORT = int(os.environ.get("PORT", "8000"))
-    logger.info(f"PORT environment variable found: {PORT}")
-except (ValueError, TypeError) as e:
-    PORT = 8000
-    logger.warning(f"Failed to get PORT from environment, using default: {PORT}. Error: {e}")
-
-HOST = "0.0.0.0"
-
-logger.info(f"Starting application with HOST={HOST} and PORT={PORT}")
 
 # Create FastAPI app
 app = FastAPI(
@@ -41,94 +26,55 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS middleware with minimal settings
+# CORS middleware configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "HEAD"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
 @app.get("/")
-@app.head("/")
-async def read_root():
-    """Health check endpoint"""
-    logger.info(f"Health check received. Running on port {PORT}")
-    return {
-        "status": "healthy",
-        "port": PORT,
-        "host": HOST,
-        "environment": {
-            "PORT": os.environ.get("PORT"),
-            "HOST": os.environ.get("HOST"),
-            "NLTK_DATA": os.environ.get("NLTK_DATA"),
-            "PWD": os.getcwd()
-        }
-    }
+async def health_check():
+    return {"status": "healthy"}
 
-@app.on_event("startup")
-async def startup_event():
-    """Initialize required modules at startup"""
-    logger.info(f"Starting application on {HOST}:{PORT}")
-    
-    # Test socket binding
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        sock.bind((HOST, PORT))
-        logger.info(f"Successfully bound to port {PORT}")
-        sock.close()
-    except Exception as e:
-        logger.error(f"Failed to bind to port {PORT}: {e}")
-        sys.exit(1)
-    
-    try:
-        # Import remaining modules
-        from models import ChatRequest
-        from chat_engine import get_response
-        from crisis import contains_crisis_keywords, SAFETY_MESSAGE
-        from logger import log_chat
-        from doc_engine import query_documents
-        
-        logger.info("Successfully loaded all required modules")
-    except ImportError as e:
-        logger.error(f"Failed to import required modules: {e}")
-        sys.exit(1)
+# Import remaining modules after FastAPI setup
+import nltk
+from sentence_transformers import SentenceTransformer
+from llama_index import SimpleDirectoryReader, VectorStoreIndex
+
+# Download required NLTK data
+nltk.download('punkt', download_dir='/tmp/nltk_data')
+nltk.download('stopwords', download_dir='/tmp/nltk_data')
+
+# Load the model and create index
+model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+logger.info("Loading documents and building index...")
+documents = SimpleDirectoryReader('data').load_data()
+index = VectorStoreIndex.from_documents(documents)
 
 @app.post("/chat")
-async def chat_with_memory(request: Request):
+async def chat_endpoint(request: Request):
     try:
         data = await request.json()
-        chat_request = ChatRequest(**data)
+        query = data.get("message", "")
+        if not query:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "No message provided"}
+            )
         
-        if contains_crisis_keywords(chat_request.query):
-            log_chat(chat_request.session_id, chat_request.query, SAFETY_MESSAGE, is_crisis=True)
-            return {"response": SAFETY_MESSAGE}
-
-        response = get_response(chat_request.session_id, chat_request.query)
-        log_chat(chat_request.session_id, chat_request.query, response, is_crisis=False)
-        return {"response": response}
-    except Exception as e:
-        logger.error(f"Error in chat endpoint: {e}")
-        return JSONResponse(
-            status_code=500,
-            content={"error": str(e)}
-        )
-
-@app.post("/doc-chat")
-async def chat_with_documents(request: Request):
-    try:
-        data = await request.json()
-        response = query_documents(data.get("query", ""))
+        response = index.as_query_engine().query(query)
         return {"response": str(response)}
     except Exception as e:
-        logger.error(f"Error in doc-chat endpoint: {e}")
+        logger.error(f"Error processing request: {str(e)}")
         return JSONResponse(
             status_code=500,
-            content={"error": str(e)}
+            content={"error": "Internal server error"}
         )
 
 if __name__ == "__main__":
-    # For local development
-    logger.info(f"Starting server on {HOST}:{PORT}")
-    uvicorn.run(app, host=HOST, port=PORT)
+    import uvicorn
+    port = int(os.environ.get("PORT", 10000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
