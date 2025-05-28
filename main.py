@@ -42,7 +42,8 @@ async def health_check():
 # Import remaining modules after FastAPI setup
 import nltk
 from sentence_transformers import SentenceTransformer
-from llama_index import SimpleDirectoryReader, VectorStoreIndex
+from llama_index.core import VectorStoreIndex
+from llama_index.readers.file import SimpleDirectoryReader
 
 # Download required NLTK data
 nltk.download('punkt', download_dir='/tmp/nltk_data')
