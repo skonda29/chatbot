@@ -1,9 +1,13 @@
 import os
 import sys
 import logging
+import socket
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 # Set environment variables before any other imports
@@ -21,15 +25,31 @@ import uvicorn
 # Load environment variables
 load_dotenv()
 
-# Get port from environment with fallback
+# Get port from environment with explicit fallback and logging
 try:
     PORT = int(os.environ.get("PORT", "10000"))
-except ValueError:
+    logger.info(f"PORT environment variable found: {PORT}")
+except (ValueError, TypeError) as e:
     PORT = 10000
+    logger.warning(f"Failed to get PORT from environment, using default: {PORT}. Error: {e}")
 
 HOST = "0.0.0.0"
 
 logger.info(f"Starting application with HOST={HOST} and PORT={PORT}")
+
+# Verify port is available
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+try:
+    sock.bind((HOST, PORT))
+    logger.info(f"Successfully bound to port {PORT}")
+    sock.close()
+except socket.error as e:
+    logger.error(f"Failed to bind to port {PORT}: {e}")
+    # Try to find an available port
+    sock.bind((HOST, 0))
+    PORT = sock.getsockname()[1]
+    logger.info(f"Found available port: {PORT}")
+    sock.close()
 
 # Create FastAPI app
 app = FastAPI(
@@ -56,11 +76,6 @@ async def startup_event():
     
     # Import only what's needed
     try:
-        # Disable unnecessary features
-        os.environ["TRANSFORMERS_NO_TF"] = "1"
-        os.environ["TOKENIZERS_PARALLELISM"] = "false"
-        os.environ["NLTK_DATA"] = "/tmp/nltk_data"
-        
         # Import with memory optimization
         import torch
         torch.set_grad_enabled(False)  # Disable gradient computation
@@ -82,7 +97,16 @@ async def startup_event():
 async def read_root():
     """Health check endpoint"""
     logger.info(f"Health check received. Running on port {PORT}")
-    return {"status": "healthy", "port": PORT}
+    return {
+        "status": "healthy",
+        "port": PORT,
+        "host": HOST,
+        "environment": {
+            "PORT": os.environ.get("PORT"),
+            "HOST": os.environ.get("HOST"),
+            "PYTHONPATH": os.environ.get("PYTHONPATH"),
+        }
+    }
 
 @app.post("/chat")
 async def chat_with_memory(request: Request):
@@ -124,4 +148,5 @@ def start():
 
 if __name__ == "__main__":
     # For local development
+    logger.info(f"Starting server on {HOST}:{PORT}")
     uvicorn.run(app, host=HOST, port=PORT)
