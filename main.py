@@ -22,7 +22,11 @@ import uvicorn
 load_dotenv()
 
 # Get port from environment with fallback
-PORT = int(os.environ.get("PORT", 10000))  # Changed to use os.environ.get for Render
+try:
+    PORT = int(os.environ.get("PORT", "10000"))
+except ValueError:
+    PORT = 10000
+
 HOST = "0.0.0.0"
 
 logger.info(f"Starting application with HOST={HOST} and PORT={PORT}")
@@ -120,4 +124,4 @@ def start():
 
 if __name__ == "__main__":
     # For local development
-    uvicorn.run("main:app", host=HOST, port=PORT, reload=True)
+    uvicorn.run(app, host=HOST, port=PORT)

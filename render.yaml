@@ -3,13 +3,8 @@ services:
     name: chatbot-api
     env: python
     plan: free
-    buildCommand: |
-      python -m pip install --upgrade pip
-      pip install -r requirements.txt
-      python -c "import nltk; nltk.download('punkt', download_dir='/tmp/nltk_data')"
-      # Pre-download required models
-      python -c "from transformers import AutoTokenizer; AutoTokenizer.from_pretrained('sentence-transformers/all-MiniLM-L6-v2', cache_dir='/tmp/transformers')"
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1 --timeout-keep-alive 30
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn main:app --bind 0.0.0.0:$PORT --worker-class uvicorn.workers.UvicornWorker --workers 1 --timeout 120
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
@@ -17,38 +12,15 @@ services:
         sync: false
       - key: FRONTEND_URL
         sync: false
-      - key: ENVIRONMENT
-        value: production
+      - key: PORT
+        value: 10000
+      - key: TRANSFORMERS_NO_TF
+        value: "1"
       - key: TOKENIZERS_PARALLELISM
         value: "false"
-      - key: HOST
-        value: "0.0.0.0"
-      - key: PYTHONPATH
-        value: .
       - key: NLTK_DATA
         value: /tmp/nltk_data
-      - key: TRANSFORMERS_CACHE
-        value: /tmp/transformers
-      - key: TORCH_HOME
-        value: /tmp/torch
-      - key: HF_HOME
-        value: /tmp/huggingface
-      - key: MALLOC_TRIM_THRESHOLD_
-        value: "65536"
-      - key: PYTHONMALLOC
-        value: "malloc"
       - key: PYTHONUNBUFFERED
         value: "true"
-    autoDeploy: true
     healthCheckPath: /
-    healthCheckTimeout: 60
-    disk:
-      name: tmp-data
-      mountPath: /tmp
-      sizeGB: 1
-    scaling:
-      minInstances: 1
-      maxInstances: 1
-      targetMemoryPercent: 70
-    initialInstanceCount: 1
-    numInstances: 1
+    autoDeploy: true
