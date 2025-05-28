@@ -22,8 +22,8 @@ import uvicorn
 load_dotenv()
 
 # Get port from environment with fallback
-PORT = int(os.getenv("PORT", "10000"))
-HOST = os.getenv("HOST", "0.0.0.0")
+PORT = int(os.environ.get("PORT", 10000))  # Changed to use os.environ.get for Render
+HOST = "0.0.0.0"
 
 logger.info(f"Starting application with HOST={HOST} and PORT={PORT}")
 
@@ -39,22 +39,35 @@ app = FastAPI(
 # CORS middleware with minimal settings
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[os.getenv("FRONTEND_URL", "")],
+    allow_origins=["*"],  # Temporarily allow all origins
     allow_credentials=True,
-    allow_methods=["GET", "POST", "HEAD"],  # Added HEAD for health checks
+    allow_methods=["GET", "POST", "HEAD"],
     allow_headers=["*"],
 )
 
 @app.on_event("startup")
 async def startup_event():
+    """Initialize required modules at startup with memory optimization"""
     logger.info(f"Starting application on {HOST}:{PORT}")
-    # Initialize required modules at startup
+    
+    # Import only what's needed
     try:
+        # Disable unnecessary features
+        os.environ["TRANSFORMERS_NO_TF"] = "1"
+        os.environ["TOKENIZERS_PARALLELISM"] = "false"
+        os.environ["NLTK_DATA"] = "/tmp/nltk_data"
+        
+        # Import with memory optimization
+        import torch
+        torch.set_grad_enabled(False)  # Disable gradient computation
+        
+        # Import remaining modules
         from models import ChatRequest
         from chat_engine import get_response
         from crisis import contains_crisis_keywords, SAFETY_MESSAGE
         from logger import log_chat
         from doc_engine import query_documents
+        
         logger.info("Successfully loaded all required modules")
     except ImportError as e:
         logger.error(f"Failed to import required modules: {e}")
@@ -62,10 +75,10 @@ async def startup_event():
 
 @app.get("/")
 @app.head("/")  # Added HEAD endpoint for health checks
-def read_root():
+async def read_root():
     """Health check endpoint"""
-    logger.info("Health check request received")
-    return {"status": "ok", "port": PORT, "host": HOST}
+    logger.info(f"Health check received. Running on port {PORT}")
+    return {"status": "healthy", "port": PORT}
 
 @app.post("/chat")
 async def chat_with_memory(request: Request):
@@ -106,4 +119,5 @@ def start():
     uvicorn.run(app, host=HOST, port=PORT, log_level="info")
 
 if __name__ == "__main__":
-    start()
+    # For local development
+    uvicorn.run("main:app", host=HOST, port=PORT, reload=True)

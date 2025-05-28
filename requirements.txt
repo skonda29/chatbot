@@ -3,6 +3,7 @@ llama-index==0.10.14
 llama-index-embeddings-huggingface==0.2.0  
 fastapi
 uvicorn
+gunicorn
 requests
 python-dotenv
 google-generativeai
