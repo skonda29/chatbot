@@ -1,0 +1,13 @@
+.git
+.env
+.env.local
+__pycache__
+*.pyc
+venv
+.vercel
+*.log
+index_store/
+nltk_data/
+.pytest_cache/
+.coverage
+htmlcov/ 

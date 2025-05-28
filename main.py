@@ -18,6 +18,13 @@ os.environ["NLTK_DATA"] = "/tmp/nltk_data"
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from llama_index.core import VectorStoreIndex, SimpleDirectoryReader
+from llama_index.core.embeddings import HuggingFaceEmbedding
+import nltk
+
+# Download required NLTK data
+nltk.download('punkt', download_dir='/tmp/nltk_data')
+nltk.download('stopwords', download_dir='/tmp/nltk_data')
 
 # Create FastAPI app
 app = FastAPI(
@@ -37,23 +44,27 @@ app.add_middleware(
 
 @app.get("/")
 async def health_check():
-    return {"status": "healthy"}
+    """Health check endpoint that also returns port information"""
+    port = os.environ.get("PORT", "Not set")
+    return {
+        "status": "healthy",
+        "port": port,
+        "environment": {
+            "NLTK_DATA": os.environ.get("NLTK_DATA"),
+            "PORT": port
+        }
+    }
 
-# Import remaining modules after FastAPI setup
-import nltk
-from sentence_transformers import SentenceTransformer
-from llama_index.core import VectorStoreIndex
-from llama_index.readers.file import SimpleDirectoryReader
+# Initialize the embedding model
+embed_model = HuggingFaceEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
-# Download required NLTK data
-nltk.download('punkt', download_dir='/tmp/nltk_data')
-nltk.download('stopwords', download_dir='/tmp/nltk_data')
-
-# Load the model and create index
-model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+# Load documents and create index
 logger.info("Loading documents and building index...")
 documents = SimpleDirectoryReader('data').load_data()
-index = VectorStoreIndex.from_documents(documents)
+index = VectorStoreIndex.from_documents(
+    documents,
+    embed_model=embed_model
+)
 
 @app.post("/chat")
 async def chat_endpoint(request: Request):
@@ -77,5 +88,5 @@ async def chat_endpoint(request: Request):
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("PORT", 10000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
+    port = int(os.environ.get("PORT", 8000))  # Render requires PORT env variable
+    uvicorn.run("main:app", host="0.0.0.0", port=port)

@@ -4,7 +4,6 @@ __pycache__/
 *$py.class
 *.so
 .Python
-env/
 build/
 develop-eggs/
 dist/
@@ -24,15 +23,27 @@ wheels/
 # Virtual Environment
 venv/
 ENV/
-
-# Environment Variables
-.env
+env/
 
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
+
+# Vercel
+.vercel
+.env
+.env.local
+
+# Project specific
+/tmp/
+/nltk_data/
+/index_store/
+*.log
+
+# Environment Variables
+.env
 
 # Logs and databases
 *.log
@@ -45,7 +56,6 @@ metrics_report.txt
 metrics_summary.txt
 
 # Application specific
-index_store/
 static/metrics_dashboard.html
 
 # OS specific

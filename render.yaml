@@ -3,27 +3,16 @@ services:
     name: chatbot-api
     env: python
     plan: free
-    region: oregon
-    buildCommand: |
-      pip install -r requirements.txt
-      chmod +x start.sh
-    startCommand: ./start.sh
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
-      - key: PORT
-        value: 10000
-      - key: GEMINI_API_KEY
-        sync: false
-      - key: FRONTEND_URL
-        sync: false
       - key: TRANSFORMERS_NO_TF
         value: "1"
       - key: TOKENIZERS_PARALLELISM
         value: "false"
       - key: NLTK_DATA
         value: /tmp/nltk_data
-      - key: PYTHONUNBUFFERED
-        value: "true"
     healthCheckPath: /
     autoDeploy: true
