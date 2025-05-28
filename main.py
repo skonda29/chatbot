@@ -19,67 +19,57 @@ os.environ["NLTK_DATA"] = "/tmp/nltk_data"
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from dotenv import load_dotenv
 import uvicorn
-
-# Load environment variables
-load_dotenv()
 
 # Get port from environment with explicit fallback and logging
 try:
-    PORT = int(os.environ.get("PORT", "10000"))
+    PORT = int(os.environ.get("PORT", "8000"))
     logger.info(f"PORT environment variable found: {PORT}")
 except (ValueError, TypeError) as e:
-    PORT = 10000
+    PORT = 8000
     logger.warning(f"Failed to get PORT from environment, using default: {PORT}. Error: {e}")
 
 HOST = "0.0.0.0"
 
 logger.info(f"Starting application with HOST={HOST} and PORT={PORT}")
 
-# Verify port is available
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-try:
-    sock.bind((HOST, PORT))
-    logger.info(f"Successfully bound to port {PORT}")
-    sock.close()
-except socket.error as e:
-    logger.error(f"Failed to bind to port {PORT}: {e}")
-    # Try to find an available port
-    sock.bind((HOST, 0))
-    PORT = sock.getsockname()[1]
-    logger.info(f"Found available port: {PORT}")
-    sock.close()
-
 # Create FastAPI app
 app = FastAPI(
     title="ReachOut Chatbot API",
     description="Mental health chatbot with document Q&A capabilities",
-    version="1.0.0",
-    docs_url=None,  # Disable docs to save memory
-    redoc_url=None  # Disable redoc to save memory
+    version="1.0.0"
 )
 
 # CORS middleware with minimal settings
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Temporarily allow all origins
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["GET", "POST", "HEAD"],
     allow_headers=["*"],
 )
 
+@app.get("/")
+@app.head("/")
+async def read_root():
+    """Health check endpoint"""
+    logger.info(f"Health check received. Running on port {PORT}")
+    return {
+        "status": "healthy",
+        "port": PORT,
+        "host": HOST,
+        "environment": {
+            "PORT": os.environ.get("PORT"),
+            "HOST": os.environ.get("HOST")
+        }
+    }
+
 @app.on_event("startup")
 async def startup_event():
-    """Initialize required modules at startup with memory optimization"""
+    """Initialize required modules at startup"""
     logger.info(f"Starting application on {HOST}:{PORT}")
     
-    # Import only what's needed
     try:
-        # Import with memory optimization
-        import torch
-        torch.set_grad_enabled(False)  # Disable gradient computation
-        
         # Import remaining modules
         from models import ChatRequest
         from chat_engine import get_response
@@ -91,22 +81,6 @@ async def startup_event():
     except ImportError as e:
         logger.error(f"Failed to import required modules: {e}")
         sys.exit(1)
-
-@app.get("/")
-@app.head("/")  # Added HEAD endpoint for health checks
-async def read_root():
-    """Health check endpoint"""
-    logger.info(f"Health check received. Running on port {PORT}")
-    return {
-        "status": "healthy",
-        "port": PORT,
-        "host": HOST,
-        "environment": {
-            "PORT": os.environ.get("PORT"),
-            "HOST": os.environ.get("HOST"),
-            "PYTHONPATH": os.environ.get("PYTHONPATH"),
-        }
-    }
 
 @app.post("/chat")
 async def chat_with_memory(request: Request):
@@ -140,11 +114,6 @@ async def chat_with_documents(request: Request):
             status_code=500,
             content={"error": str(e)}
         )
-
-def start():
-    """Launched with `python main.py` at command line"""
-    logger.info(f"Manual startup: Running app with uvicorn on {HOST}:{PORT}")
-    uvicorn.run(app, host=HOST, port=PORT, log_level="info")
 
 if __name__ == "__main__":
     # For local development
