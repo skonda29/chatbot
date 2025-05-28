@@ -16,13 +16,16 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
+import uvicorn
 
 # Load environment variables
 load_dotenv()
 
 # Get port from environment with fallback
-PORT = int(os.getenv("PORT", 10000))
-logger.info(f"Configured to use PORT: {PORT}")
+PORT = int(os.getenv("PORT", "10000"))
+HOST = os.getenv("HOST", "0.0.0.0")
+
+logger.info(f"Starting application with HOST={HOST} and PORT={PORT}")
 
 # Create FastAPI app
 app = FastAPI(
@@ -44,7 +47,7 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup_event():
-    logger.info(f"Starting application on port {PORT}")
+    logger.info(f"Starting application on {HOST}:{PORT}")
     # Initialize required modules at startup
     try:
         from models import ChatRequest
@@ -62,7 +65,7 @@ async def startup_event():
 def read_root():
     """Health check endpoint"""
     logger.info("Health check request received")
-    return {"status": "ok", "port": PORT}
+    return {"status": "ok", "port": PORT, "host": HOST}
 
 @app.post("/chat")
 async def chat_with_memory(request: Request):
@@ -97,7 +100,10 @@ async def chat_with_documents(request: Request):
             content={"error": str(e)}
         )
 
+def start():
+    """Launched with `python main.py` at command line"""
+    logger.info(f"Manual startup: Running app with uvicorn on {HOST}:{PORT}")
+    uvicorn.run(app, host=HOST, port=PORT, log_level="info")
+
 if __name__ == "__main__":
-    import uvicorn
-    logger.info(f"Starting server on port {PORT}")
-    uvicorn.run(app, host="0.0.0.0", port=PORT)
+    start()

@@ -9,7 +9,7 @@ services:
       python -c "import nltk; nltk.download('punkt', download_dir='/tmp/nltk_data')"
       # Pre-download required models
       python -c "from transformers import AutoTokenizer; AutoTokenizer.from_pretrained('sentence-transformers/all-MiniLM-L6-v2', cache_dir='/tmp/transformers')"
-    startCommand: python main.py
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1 --timeout-keep-alive 30
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
@@ -21,8 +21,8 @@ services:
         value: production
       - key: TOKENIZERS_PARALLELISM
         value: "false"
-      - key: PORT
-        value: "10000"
+      - key: HOST
+        value: "0.0.0.0"
       - key: PYTHONPATH
         value: .
       - key: NLTK_DATA
