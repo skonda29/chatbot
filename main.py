@@ -5,8 +5,9 @@ import socket
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.DEBUG,  # Changed to DEBUG for more verbose logging
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    stream=sys.stdout  # Explicitly log to stdout
 )
 logger = logging.getLogger(__name__)
 
@@ -60,7 +61,9 @@ async def read_root():
         "host": HOST,
         "environment": {
             "PORT": os.environ.get("PORT"),
-            "HOST": os.environ.get("HOST")
+            "HOST": os.environ.get("HOST"),
+            "NLTK_DATA": os.environ.get("NLTK_DATA"),
+            "PWD": os.getcwd()
         }
     }
 
@@ -68,6 +71,16 @@ async def read_root():
 async def startup_event():
     """Initialize required modules at startup"""
     logger.info(f"Starting application on {HOST}:{PORT}")
+    
+    # Test socket binding
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.bind((HOST, PORT))
+        logger.info(f"Successfully bound to port {PORT}")
+        sock.close()
+    except Exception as e:
+        logger.error(f"Failed to bind to port {PORT}: {e}")
+        sys.exit(1)
     
     try:
         # Import remaining modules
