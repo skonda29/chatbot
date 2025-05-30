@@ -50,3 +50,37 @@ pip install -r requirements.txt
 ### Run the FastAPI server
 ```bash
 uvicorn main:app --reload
+```
+
+## Environment Variables
+
+The following environment variables need to be set in AWS Amplify:
+
+```bash
+# Python Runtime
+PYTHON_VERSION=3.9.12
+
+# Application Settings
+PORT=8080
+NLTK_DATA=/tmp/nltk_data
+
+# Model Settings
+TRANSFORMERS_NO_TF=1
+TOKENIZERS_PARALLELISM=false
+```
+
+## Deployment
+
+1. AWS Amplify Console Setup:
+   - Go to App settings → Environment variables
+   - Add all required environment variables
+   - Build settings will use amplify.yml
+   - Monitor builds in the Deploy tab
+
+2. Custom Domain (Optional):
+   - Set up in Domain management
+   - SSL certificate provided automatically
+
+3. Monitoring:
+   - View logs in Deploy tab
+   - Real-time monitoring in App settings → Monitoring
