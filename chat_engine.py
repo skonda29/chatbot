@@ -20,30 +20,6 @@ model = genai.GenerativeModel("gemini-1.5-flash")
 # Session memory for chat history
 session_memory_map = {}
 
-class ChatEngine:
-    def __init__(self):
-        self.responses = {
-            "hello": "Hello! How can I help you today?",
-            "how are you": "I'm doing well, thank you for asking. How are you feeling?",
-            "help": "I'm here to help you with any mental health concerns or questions you may have. What's on your mind?",
-            "stress": "I understand that stress can be overwhelming. Would you like to talk about what's causing your stress?",
-            "anxiety": "It's normal to feel anxious sometimes. Can you tell me more about what you're experiencing?",
-            "depression": "I'm here to listen and support you. Have you considered talking to a mental health professional about these feelings?",
-        }
-    
-    def get_response(self, message: str) -> str:
-        """
-        Get a response based on the user's message.
-        """
-        message = message.lower().strip()
-        
-        # Check for exact matches first
-        if message in self.responses:
-            return self.responses[message]
-            
-        # Default response for unmatched messages
-        return "I understand you're saying: " + message + ". I'm here to listen and support you. Would you like to tell me more about how you're feeling?"
-
 def get_response(session_id: str, user_query: str):
     # Initialize chat history for session
     if session_id not in session_memory_map:

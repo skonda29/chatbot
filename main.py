@@ -1,62 +1,48 @@
 import os
 import sys
 import logging
-from fastapi import FastAPI, Request
+os.environ["TRANSFORMERS_NO_TF"] = "1"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["NLTK_DATA"] = "/tmp/nltk_data"
+
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
-from pathlib import Path
-import nltk
+from dotenv import load_dotenv
 from models import ChatRequest
-from chat_engine import ChatEngine
+from chat_engine import get_response
+from crisis import contains_crisis_keywords, SAFETY_MESSAGE
+from logger import log_chat
 
 # Configure logging
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     stream=sys.stdout
 )
 logger = logging.getLogger(__name__)
 
-# Set environment variables before any other imports
-os.environ["TRANSFORMERS_NO_TF"] = "1"
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
-os.environ["NLTK_DATA"] = "/tmp/nltk_data"
+# Load environment variables
+load_dotenv()
 
-# Create FastAPI app
+# FastAPI app
 app = FastAPI(
     title="ReachOut Chatbot API",
-    description="Mental health chatbot with document Q&A capabilities",
+    description="Mental health chatbot with crisis detection and AI support",
     version="1.0.0"
 )
 
-# CORS middleware configuration
+# CORS middleware - allow all origins for frontend integration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Allow all origins for frontend integration
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Get the directory of the current file
-BASE_DIR = Path(__file__).resolve().parent
-
-# Mount static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
-# Initialize chat engine
-chat_engine = ChatEngine()
-
-# Download required NLTK data on startup
-try:
-    nltk.download('punkt', download_dir='/tmp/nltk_data')
-    nltk.download('stopwords', download_dir='/tmp/nltk_data')
-except Exception as e:
-    logger.warning(f"Could not download NLTK data: {e}")
-
 @app.get("/", response_class=HTMLResponse)
-async def root():
+def read_root():
     return HTMLResponse("""
     <!DOCTYPE html>
     <html>
@@ -88,26 +74,19 @@ async def root():
                 font-size: 2.5em;
                 text-align: center;
             }
-            .endpoint {
+            .feature {
                 background: #f7fafc;
                 padding: 20px;
                 margin: 20px 0;
                 border-radius: 12px;
                 border-left: 6px solid #4c51bf;
-                transition: transform 0.2s;
             }
-            .endpoint:hover {
-                transform: translateY(-2px);
-            }
-            .endpoint h3 {
-                margin: 0 0 15px 0;
-                color: #2d3748;
-                font-size: 1.3em;
-            }
-            .endpoint p {
-                margin: 8px 0;
-                color: #4a5568;
-                line-height: 1.6;
+            .endpoint {
+                background: #e6fffa;
+                padding: 15px;
+                margin: 10px 0;
+                border-radius: 8px;
+                border-left: 4px solid #38b2ac;
             }
             code {
                 background: #edf2f7;
@@ -125,121 +104,103 @@ async def root():
                 margin-bottom: 30px;
                 font-weight: bold;
             }
-            .test-section {
-                background: #bee3f8;
-                padding: 20px;
-                border-radius: 8px;
-                margin: 20px 0;
-                color: #2d3748;
-            }
-            button {
-                background: #4c51bf;
-                color: white;
-                border: none;
-                padding: 10px 20px;
-                border-radius: 8px;
-                cursor: pointer;
-                font-size: 16px;
-                margin: 10px 5px;
-            }
-            button:hover {
-                background: #3c4fd3;
-            }
-            #response {
-                background: #f7fafc;
-                padding: 15px;
-                border-radius: 8px;
-                margin-top: 15px;
-                min-height: 50px;
-                border: 1px solid #e2e8f0;
-            }
         </style>
     </head>
     <body>
         <div class="container">
             <div class="status">✅ ReachOut Chatbot API is Running!</div>
-            <h1>🤖 ReachOut Chatbot API</h1>
+            <h1>🤖 ReachOut Mental Health Chatbot</h1>
             <p style="text-align: center; font-size: 1.1em; margin-bottom: 40px;">
-                Welcome to the ReachOut Mental Health Chatbot API. Test the endpoints below:
+                AI-powered mental health support with crisis detection
             </p>
             
+            <div class="feature">
+                <h3>🛡️ Crisis Detection & Safety</h3>
+                <p>Automatic detection of crisis keywords with immediate safety resources</p>
+            </div>
+            
+            <div class="feature">
+                <h3>🧠 AI-Powered Conversations</h3>
+                <p>Session-based conversations with empathetic responses powered by Gemini AI</p>
+            </div>
+            
+            <div class="feature">
+                <h3>📊 Chat Logging</h3>
+                <p>Secure conversation logging for analysis and improvement</p>
+            </div>
+            
+            <h2>API Endpoints:</h2>
+            
             <div class="endpoint">
-                <h3>🏥 Health Check</h3>
-                <p><strong>GET</strong> /health</p>
-                <p>Check if the API is running and view system information</p>
-                <button onclick="testHealth()">Test Health Endpoint</button>
+                <h4>POST /chat</h4>
+                <p>Main chat endpoint with crisis detection</p>
+                <code>{"session_id": "user123", "query": "I feel anxious"}</code>
             </div>
             
             <div class="endpoint">
-                <h3>💬 Chat Endpoint</h3>
-                <p><strong>POST</strong> /chat</p>
-                <p>Send a message: <code>{"message": "your message here"}</code></p>
-                <p>Get supportive responses for mental health conversations</p>
-                <button onclick="testChat()">Test Chat Endpoint</button>
+                <h4>POST /doc-chat</h4>
+                <p>Document-based chat for specific mental health topics</p>
+                <code>{"session_id": "user123", "query": "stress management tips"}</code>
             </div>
             
-            <div class="test-section">
-                <h3>API Response:</h3>
-                <div id="response">Click a button above to test the API endpoints</div>
+            <div class="endpoint">
+                <h4>GET /health</h4>
+                <p>Health check endpoint</p>
             </div>
         </div>
-        
-        <script>
-            async function testHealth() {
-                try {
-                    const response = await fetch('/health');
-                    const data = await response.json();
-                    document.getElementById('response').innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
-                } catch (error) {
-                    document.getElementById('response').innerHTML = 'Error: ' + error.message;
-                }
-            }
-            
-            async function testChat() {
-                try {
-                    const response = await fetch('/chat', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({message: 'Hello, I need someone to talk to'})
-                    });
-                    const data = await response.json();
-                    document.getElementById('response').innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
-                } catch (error) {
-                    document.getElementById('response').innerHTML = 'Error: ' + error.message;
-                }
-            }
-        </script>
     </body>
     </html>
     """)
 
 @app.get("/health")
-async def health_check():
-    """Health check endpoint that also returns port information"""
-    port = os.environ.get("PORT", "Not set")
+def health_check():
+    """Health check endpoint"""
     return {
         "status": "healthy",
         "service": "ReachOut Chatbot API",
         "version": "1.0.0",
-        "port": port,
-        "environment": {
-            "NLTK_DATA": os.environ.get("NLTK_DATA"),
-            "PORT": port
-        }
+        "features": ["crisis_detection", "ai_chat", "session_management", "logging"]
     }
 
 @app.post("/chat")
-async def chat(request: ChatRequest):
+def chat_with_memory(request: ChatRequest):
     try:
-        response = chat_engine.get_response(request.message)
-        return JSONResponse(content={"response": response})
+        session_id = request.session_id
+        user_query = request.query
+        
+        # Crisis check
+        if contains_crisis_keywords(user_query):
+            log_chat(session_id, user_query, SAFETY_MESSAGE, is_crisis=True)
+            return {"response": SAFETY_MESSAGE}
+        
+        # Get chatbot response
+        response = get_response(session_id, user_query)
+        log_chat(session_id, user_query, response, is_crisis=False)
+        
+        return {"response": response}
+        
     except Exception as e:
-        logger.error(f"Error processing request: {str(e)}")
+        logger.error(f"Error in chat endpoint: {str(e)}")
         return JSONResponse(
             status_code=500,
             content={"error": "Internal server error", "message": str(e)}
+        )
+
+@app.post("/doc-chat")
+def chat_with_documents(request: ChatRequest):
+    try:
+        # Import here to avoid startup issues if doc_engine has problems
+        from doc_engine import query_documents
+        response = query_documents(request.query)
+        return {"response": str(response)}
+    except ImportError:
+        logger.warning("doc_engine not available, falling back to regular chat")
+        return chat_with_memory(request)
+    except Exception as e:
+        logger.error(f"Error in doc-chat endpoint: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": "Document chat unavailable", "message": str(e)}
         )
 
 if __name__ == "__main__":
